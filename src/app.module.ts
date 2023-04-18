@@ -8,7 +8,9 @@ import { ConfigModule } from '@nestjs/config';
 @Module({
   imports: [
     UsersModule,
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({
+      envFilePath: '.development.env',
+    }),
     TypeOrmModule.forRoot({
       type: process.env.DB_TYPE as any,
       host: process.env.PG_HOST,
