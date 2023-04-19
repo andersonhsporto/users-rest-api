@@ -3,43 +3,61 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { UserNotFoundException } from '../exceptions/user-not-found.exception';
-import { IUserDto } from '../dto/user.dto';
+import { UserDto } from '../dto/user.dto';
+import { UserDuplicatedException } from '../exceptions/user-duplicated.exception';
+import { Address } from '../entities/address.entity';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @InjectRepository(Address)
+    private addressRepository: Repository<Address>,
   ) {}
 
-  async findAll(): Promise<User[]> {
-    return await this.usersRepository.find();
+  async findAll(): Promise<UserDto[]> {
+    const users: User[] = await this.usersRepository.find();
+    return UserDto.fromEntityArray(users);
   }
 
-  async findOne(id: number): Promise<User> {
-    const user: User = await this.usersRepository.findOne({ where: { id } });
+  async findOne(id: number): Promise<UserDto> {
+    const user: User = await this.usersRepository.findOne({
+      relations: ['address'],
+      where: { id },
+    });
     if (!user) {
       throw new UserNotFoundException();
     } else {
-      return user;
+      console.log(user.address);
+      return UserDto.fromEntity(user);
     }
   }
 
-  async create(userDto: IUserDto): Promise<User> {
-    if (this.isDtoEmpty(userDto)) {
-      throw new UserNotFoundException();
-    } else if (!(await this.userExistsByCpf(userDto.cpf))) {
-      throw new UserNotFoundException();
+  async create(userDto: UserDto): Promise<UserDto> {
+    if (await this.userExistsByCpf(userDto.cpf)) {
+      throw new UserDuplicatedException('User already exists', 409);
     }
-    const newUser: User = await this.usersRepository.create(
-      User.fromDto(userDto),
-    );
-    return await this.usersRepository.save(newUser);
+    const newAddress: Address = Address.fromUserDto(userDto);
+    await this.addressRepository.create(newAddress);
+    await this.addressRepository.save(newAddress);
+
+    const newUser: User = User.fromDto(userDto);
+    newUser.address = newAddress;
+
+    await this.usersRepository.create(newUser);
+    await this.usersRepository.save(newUser);
+
+    return UserDto.fromEntity(newUser);
   }
 
-  async update(id: number, user: User): Promise<User> {
+  async update(id: number, user: User): Promise<UserDto> {
     await this.usersRepository.update({ id }, user);
-    return await this.usersRepository.findOne({ where: { id } });
+    const updatedUser: User = await this.usersRepository.findOne({
+      where: { id },
+    });
+
+    return UserDto.fromEntity(updatedUser);
   }
 
   async delete(id: number): Promise<void> {
@@ -55,14 +73,7 @@ export class UsersService {
     return await this.usersRepository.exist({ where: { cpf } });
   }
 
-  private isDtoEmpty(userDto: IUserDto): boolean {
-    return (
-      userDto.name == null ||
-      userDto.email == null ||
-      userDto.cpf == null ||
-      userDto.street == null ||
-      userDto.number == null ||
-      userDto.zipCode == null
-    );
+  async deleteAll(): Promise<void> {
+    await this.usersRepository.clear();
   }
 }

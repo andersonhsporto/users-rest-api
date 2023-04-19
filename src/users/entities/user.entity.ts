@@ -6,7 +6,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Address } from './address.entity';
-import { IUserDto } from '../dto/user.dto';
+import { UserDto } from '../dto/user.dto';
 
 @Entity()
 export class User {
@@ -25,17 +25,16 @@ export class User {
   @Column()
   password: string;
 
-  @OneToOne(() => Address)
+  @OneToOne(() => Address, { cascade: true })
   @JoinColumn()
   address: Address;
 
-  static fromDto(dto: IUserDto): User {
+  static fromDto(dto: UserDto): User {
     const user: User = new User();
     user.name = dto.name;
     user.email = dto.email;
     user.cpf = dto.cpf;
     user.password = dto.password;
-    user.address = Address.fromUserDto(dto);
     return user;
   }
 }
